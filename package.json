@@ -22,7 +22,7 @@
   },
   "dependencies": {
     "vue": "^3.4.0",
-    "pinia": "^2.1.0",
+    "pinia": "^3.0.4",
     "uplot": "^1.6.0",
     "lucide-vue-next": "^0.400.0"
   },
