@@ -110,6 +110,7 @@ export async function authedFetch<T = unknown>(req: HttpRequest): Promise<T> {
 
   let attempt = 0;
   let did401Retry = false;
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     let res: Response;
     try {

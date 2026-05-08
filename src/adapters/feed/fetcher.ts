@@ -61,6 +61,7 @@ async function fetchOnce(url: string, timeoutMs: number): Promise<Response> {
  */
 export async function fetchFeedXml(source: FeedSourceConfig): Promise<string> {
   let attempt = 0;
+  // eslint-disable-next-line no-constant-condition
   while (true) {
     let res: Response;
     try {
