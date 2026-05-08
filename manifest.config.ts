@@ -64,10 +64,10 @@ export default defineManifest({
     type: 'module',
   },
   icons: {
-    '16': 'public/icons/icon-16.svg',
-    '32': 'public/icons/icon-32.svg',
-    '48': 'public/icons/icon-48.svg',
-    '128': 'public/icons/icon-128.svg',
+    '16': 'public/icons/icon-16.png',
+    '32': 'public/icons/icon-32.png',
+    '48': 'public/icons/icon-48.png',
+    '128': 'public/icons/icon-128.png',
   },
   action: {
     default_title: 'AIRSS Dashboard',
