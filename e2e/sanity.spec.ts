@@ -2,7 +2,9 @@ import { test, expect, chromium, type BrowserContext } from '@playwright/test';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const extensionPath = path.resolve(__dirname, '..', 'dist');
 
 test.describe('AIRSS new tab sanity', () => {
