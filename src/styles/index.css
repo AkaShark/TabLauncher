@@ -1,0 +1,213 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..800;1,9..144,300..800&family=JetBrains+Mono:wght@400;500;600&family=Public+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * AIRSS Dashboard — design tokens.
+ * Direction: Refined Editorial Minimalism (spec §1, combo B variant).
+ * One token surface, theme switched via prefers-color-scheme.
+ */
+:root {
+  --paper: 245 241 234;       /* warm off-white canvas */
+  --ink: 26 26 24;            /* near-black text */
+  --muted: 107 104 98;        /* secondary text */
+  --hair: 218 214 207;        /* hairline borders */
+  --accent: 31 61 45;         /* moss green — sole accent */
+  --warn: 156 102 30;         /* burnt sienna */
+  --danger: 145 50 47;        /* deep brick */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: 14 14 12;        /* ink canvas */
+    --ink: 236 231 221;       /* paper text */
+    --muted: 138 134 126;
+    --hair: 38 36 32;
+    --accent: 156 184 159;    /* muted sage */
+    --warn: 217 168 87;
+    --danger: 198 110 99;
+  }
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font-family:
+    'Public Sans',
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  background: rgb(var(--paper));
+  color: rgb(var(--ink));
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Subtle paper grain — no images, just layered radial micro-dots. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    radial-gradient(rgb(var(--ink) / 0.025) 1px, transparent 1px),
+    radial-gradient(rgb(var(--ink) / 0.018) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 2px;
+}
+
+#app {
+  position: relative;
+  z-index: 1;
+}
+
+@layer utilities {
+  .hairline {
+    border-color: rgb(var(--hair));
+  }
+  .skeleton-pulse {
+    animation: airss-pulse 1.6s ease-in-out infinite;
+  }
+  @keyframes airss-pulse {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 0.18; }
+  }
+  .stagger-in > * {
+    opacity: 0;
+    animation: airss-rise 0.42s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  }
+  .stagger-in > *:nth-child(1) { animation-delay: 0ms; }
+  .stagger-in > *:nth-child(2) { animation-delay: 50ms; }
+  .stagger-in > *:nth-child(3) { animation-delay: 100ms; }
+  .stagger-in > *:nth-child(4) { animation-delay: 150ms; }
+  @keyframes airss-rise {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  /* Editorial display number — Fraunces opsz pinned high. */
+  .num-display {
+    font-family: 'Fraunces', 'Source Serif 4', Georgia, serif;
+    font-feature-settings: 'tnum', 'lnum', 'ss01';
+    font-variation-settings: 'opsz' 144, 'SOFT' 50;
+    letter-spacing: -0.04em;
+  }
+  .serif-italic {
+    font-family: 'Fraunces', 'Source Serif 4', Georgia, serif;
+    font-style: italic;
+    font-variation-settings: 'opsz' 144, 'SOFT' 100;
+  }
+}
+
+/* Custom checkbox in our palette. */
+input[type='checkbox'].airss-check {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgb(var(--hair));
+  background: transparent;
+  cursor: pointer;
+  position: relative;
+  border-radius: 0;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+input[type='checkbox'].airss-check:hover:not(:disabled) {
+  border-color: rgb(var(--ink));
+}
+input[type='checkbox'].airss-check:checked {
+  background: rgb(var(--accent));
+  border-color: rgb(var(--accent));
+}
+input[type='checkbox'].airss-check:checked::after {
+  content: '✓';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: rgb(var(--paper));
+  line-height: 1;
+}
+input[type='checkbox'].airss-check:focus-visible {
+  outline: 1px solid rgb(var(--accent));
+  outline-offset: 2px;
+}
+
+/* uPlot — pin to mono so timestamps line up. */
+.uplot,
+.uplot *,
+.uplot *::before,
+.uplot *::after {
+  font-family: 'JetBrains Mono', ui-monospace, monospace !important;
+}
+
+/* Native select chevron in our palette. */
+select.airss-select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, rgb(var(--muted)) 50%),
+    linear-gradient(135deg, rgb(var(--muted)) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) 50%,
+    calc(100% - 9px) 50%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 22px;
+}
+
+/* Markdown body styles — used by TaskDetailModal for rendered task notes. */
+.md-body > * + * { margin-top: 0.85em; }
+.md-body .md-h { font-family: 'Fraunces', 'Source Serif 4', Georgia, serif; font-weight: 400; line-height: 1.2; letter-spacing: -0.02em; }
+.md-body .md-h1 { font-size: 1.5em; }
+.md-body .md-h2 { font-size: 1.3em; }
+.md-body .md-h3 { font-size: 1.15em; }
+.md-body .md-h4, .md-body .md-h5, .md-body .md-h6 { font-size: 1em; font-weight: 500; }
+.md-body .md-p { margin: 0; }
+.md-body .md-ul, .md-body .md-ol { padding-left: 1.4em; margin: 0; }
+.md-body .md-ul { list-style: '— '; }
+.md-body .md-ol { list-style: decimal; }
+.md-body .md-ul li, .md-body .md-ol li { margin: 0.2em 0; padding-left: 0.2em; }
+.md-body .md-link { color: rgb(var(--accent)); border-bottom: 1px solid rgb(var(--hair)); transition: border-color 160ms ease; }
+.md-body .md-link:hover { border-color: rgb(var(--accent)); }
+.md-body .md-code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.88em;
+  background: rgb(var(--hair) / 0.5);
+  padding: 0.05em 0.35em;
+}
+.md-body .md-pre {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.85em;
+  background: rgb(var(--ink) / 0.04);
+  border: 1px solid rgb(var(--hair));
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  white-space: pre;
+}
+.md-body .md-pre code { background: none; padding: 0; }
+.md-body .md-hr { border: 0; border-top: 1px solid rgb(var(--hair)); margin: 1.2em 0; }
+.md-body strong { font-weight: 600; color: rgb(var(--ink)); }
+.md-body em { font-style: italic; }
+
+::selection {
+  background: rgb(var(--accent) / 0.25);
+  color: rgb(var(--ink));
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--hair));
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--muted) / 0.6); }

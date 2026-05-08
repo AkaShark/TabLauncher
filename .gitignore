@@ -1,0 +1,22 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+*.log
+.cache/
+.vite/
+.turbo/
+
+# Local agent / workflow state
+.claude/
+.omc/state/
+.omc/logs/
+.omc/research/
+.omc/sessions/
+.omc/notepad.md
+.omc/project-memory.json

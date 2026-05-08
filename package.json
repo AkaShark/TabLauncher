@@ -1,0 +1,52 @@
+{
+  "name": "airss-newtab",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "AIRSS Dashboard - Chrome new tab dashboard with task management and feed aggregation",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .ts,.vue && oxlint .",
+    "lint:fix": "eslint . --ext .ts,.vue --fix",
+    "format": "prettier --write \"src/**/*.{ts,vue,css,json,md}\"",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test"
+  },
+  "dependencies": {
+    "vue": "^3.4.0",
+    "pinia": "^2.1.0",
+    "uplot": "^1.6.0",
+    "lucide-vue-next": "^0.400.0"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.25",
+    "@playwright/test": "^1.45.0",
+    "@types/chrome": "^0.0.270",
+    "@types/node": "^20.14.0",
+    "@typescript-eslint/eslint-plugin": "^7.16.0",
+    "@typescript-eslint/parser": "^7.16.0",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "autoprefixer": "^10.4.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-vue": "^9.27.0",
+    "happy-dom": "^14.12.0",
+    "jest-webextension-mock": "^3.9.0",
+    "oxlint": "^0.6.0",
+    "postcss": "^8.4.0",
+    "prettier": "^3.3.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0",
+    "vitest": "^1.6.0",
+    "vue-tsc": "^2.0.0"
+  }
+}
