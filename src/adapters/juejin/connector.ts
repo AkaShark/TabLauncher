@@ -236,8 +236,10 @@ export async function fetchCateFeed(opts: FetchCateFeedOptions): Promise<FeedIte
 
     const articles = body.data.filter((it) => it.item_type !== ITEM_TYPE_AD);
     for (const it of articles) {
-      const id = it.item_info.article_id;
-      if (seenIds.has(id)) continue;
+      // cate_feed items are flat (no item_info wrapper); recommend_all_feed wraps them.
+      const flat = it as unknown as { article_id?: string };
+      const id = it.item_info?.article_id ?? flat.article_id;
+      if (!id || seenIds.has(id)) continue;
       seenIds.add(id);
       collected.push(it);
       if (collected.length >= target) break;
