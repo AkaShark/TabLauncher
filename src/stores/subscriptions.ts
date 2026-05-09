@@ -33,7 +33,11 @@ export const useSubscriptionsStore = defineStore('subscriptions', {
       this.loaded = true;
     },
 
-    async addRss(url: string, label?: string): Promise<AddOutcome> {
+    async addRss(
+      url: string,
+      label?: string,
+      opts?: { enabled?: boolean },
+    ): Promise<AddOutcome> {
       this.error = null;
       let parsed: URL;
       try {
@@ -57,6 +61,7 @@ export const useSubscriptionsStore = defineStore('subscriptions', {
           type: 'rss',
           url,
           label: label?.trim() || parsed.host,
+          ...(opts?.enabled !== undefined ? { enabled: opts.enabled } : {}),
         });
         await this.load();
         return { ok: true, source: cfg };
@@ -66,13 +71,18 @@ export const useSubscriptionsStore = defineStore('subscriptions', {
       }
     },
 
-    async addSubstack(handle: string, label?: string): Promise<AddOutcome> {
+    async addSubstack(
+      handle: string,
+      label?: string,
+      opts?: { enabled?: boolean },
+    ): Promise<AddOutcome> {
       try {
         const url = substackUrl(handle);
         const cfg = await add({
           type: 'substack',
           url,
           label: label?.trim() || substackLabel(handle),
+          ...(opts?.enabled !== undefined ? { enabled: opts.enabled } : {}),
         });
         await this.load();
         return { ok: true, source: cfg };

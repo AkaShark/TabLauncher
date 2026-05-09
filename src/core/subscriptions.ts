@@ -44,6 +44,8 @@ export interface AddInput {
   url: string;
   label: string;
   meta?: JuejinCateMeta;
+  /** When false, the source is added in the disabled state. Defaults to true. */
+  enabled?: boolean;
 }
 
 /**
@@ -59,7 +61,7 @@ export async function add(input: AddInput): Promise<FeedSourceConfig> {
     url: input.url,
     label: input.label || input.url,
     addedAt: Date.now(),
-    enabled: true,
+    enabled: input.enabled ?? true,
     ...(input.meta !== undefined ? { meta: input.meta } : {}),
   };
   list.push(cfg);

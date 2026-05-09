@@ -1,14 +1,213 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useAuthStore } from '@/stores/auth';
 import { useSubscriptionsStore } from '@/stores/subscriptions';
 import type { AddOutcome } from '@/stores/subscriptions';
 import { useShortcutsStore } from '@/stores/shortcuts';
+import { useSettingsStore } from '@/stores/settings';
+import {
+  PRESET_AI_SOURCES,
+  withRsshubBase,
+  type PresetCategory,
+  type PresetSource,
+} from '@/config/preset-ai-sources';
 import JuejinAuthSection from './components/JuejinAuthSection.vue';
 
 const auth = useAuthStore();
 const subs = useSubscriptionsStore();
 const shortcuts = useShortcutsStore();
+const settings = useSettingsStore();
+
+// ----- General settings -----
+const gsBase = ref('');
+const gsRefresh = ref(120);
+const gsBusy = ref(false);
+const gsError = ref<string | null>(null);
+const gsSaved = ref(false);
+
+async function saveGeneral(): Promise<void> {
+  gsBusy.value = true;
+  gsError.value = null;
+  gsSaved.value = false;
+  try {
+    const ok = await settings.setRsshubBase(gsBase.value.trim());
+    if (!ok) {
+      gsError.value = 'RSSHub Base 必须是 http(s) URL';
+      return;
+    }
+    await settings.setRefreshInterval(Number(gsRefresh.value));
+    // Reflect any clamping back into the input.
+    gsRefresh.value = settings.refreshIntervalMin;
+    gsBase.value = settings.rsshubBase;
+    gsSaved.value = true;
+  } finally {
+    gsBusy.value = false;
+  }
+}
+
+// ----- Bulk preset import -----
+const PRESET_CATEGORIES: { id: PresetCategory; label: string }[] = [
+  { id: 'lab', label: '官方实验室' },
+  { id: 'research', label: '论文 & 研究' },
+  { id: 'media', label: '媒体 & Newsletter' },
+  { id: 'china', label: '中文社区' },
+];
+
+interface ImportRow {
+  preset: PresetSource;
+  /** Computed input URL after applying current rsshubBase. */
+  url: string;
+  checked: boolean;
+}
+
+const presetSelection = reactive<Record<string, ImportRow>>({});
+const presetBusy = ref(false);
+const presetSummary = ref<{
+  added: number;
+  skipped: number;
+  failed: { label: string; reason: string }[];
+} | null>(null);
+
+function presetKey(p: PresetSource): string {
+  return `${p.kind}::${p.input}`;
+}
+
+function rebuildPresetRows(): void {
+  const rewritten = withRsshubBase(settings.rsshubBase, PRESET_AI_SOURCES);
+  for (const key of Object.keys(presetSelection)) delete presetSelection[key];
+  rewritten.forEach((p, idx) => {
+    const orig = PRESET_AI_SOURCES[idx]!;
+    const k = presetKey(orig);
+    presetSelection[k] = {
+      preset: p,
+      url: p.kind === 'rss' ? p.input : `https://${p.input}`,
+      checked: p.defaultEnabled !== false,
+    };
+  });
+}
+
+function rowsByCategory(cat: PresetCategory): ImportRow[] {
+  return Object.values(presetSelection).filter((r) => r.preset.category === cat);
+}
+
+function selectAllInCategory(cat: PresetCategory, value: boolean): void {
+  for (const r of rowsByCategory(cat)) r.checked = value;
+}
+
+function invertCategory(cat: PresetCategory): void {
+  for (const r of rowsByCategory(cat)) r.checked = !r.checked;
+}
+
+function selectedRows(): ImportRow[] {
+  return Object.values(presetSelection).filter((r) => r.checked);
+}
+
+function originPattern(rawUrl: string): string | null {
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    return `${u.protocol}//${u.host}/*`;
+  } catch {
+    return null;
+  }
+}
+
+function truncateMid(s: string, n = 64): string {
+  if (s.length <= n) return s;
+  const head = Math.ceil(n / 2) - 1;
+  const tail = Math.floor(n / 2) - 2;
+  return `${s.slice(0, head)}…${s.slice(-tail)}`;
+}
+
+async function importSelected(): Promise<void> {
+  const rows = selectedRows();
+  if (rows.length === 0) return;
+  presetBusy.value = true;
+  presetSummary.value = null;
+
+  // CRITICAL (Architect §4): collect ALL host origins BEFORE any await,
+  // then call chrome.permissions.request once inside this click handler.
+  const origins = new Set<string>();
+  for (const r of rows) {
+    if (r.preset.kind === 'rss') {
+      const o = originPattern(r.preset.input);
+      if (o) origins.add(o);
+    } else {
+      const handle = r.preset.input;
+      const host = handle.includes('.') ? handle : `${handle}.substack.com`;
+      origins.add(`https://${host}/*`);
+    }
+  }
+  const originsArr = Array.from(origins);
+
+  let permissionGranted = true;
+  try {
+    permissionGranted = await new Promise<boolean>((resolve) => {
+      try {
+        chrome.permissions.request({ origins: originsArr }, (granted) => {
+          resolve(Boolean(granted));
+        });
+      } catch (e) {
+        console.warn('[AIRSS] bulk permissions.request failed', e);
+        resolve(false);
+      }
+    });
+  } catch {
+    permissionGranted = false;
+  }
+
+  if (!permissionGranted) {
+    presetSummary.value = {
+      added: 0,
+      skipped: 0,
+      failed: rows.map((r) => ({ label: r.preset.label, reason: '用户拒绝授予权限' })),
+    };
+    presetBusy.value = false;
+    return;
+  }
+
+  let added = 0;
+  let skipped = 0;
+  const failed: { label: string; reason: string }[] = [];
+
+  // Snapshot existing URLs for dedupe accounting (store auto-dedupes by URL).
+  const existingUrls = new Set(subs.sources.map((s) => s.url));
+
+  for (const r of rows) {
+    const enabled = r.preset.defaultEnabled !== false;
+    let outcome: AddOutcome;
+    let canonicalUrl: string | null = null;
+    try {
+      if (r.preset.kind === 'rss') {
+        canonicalUrl = r.preset.input;
+        outcome = await subs.addRss(r.preset.input, r.preset.label, { enabled });
+      } else {
+        outcome = await subs.addSubstack(r.preset.input, r.preset.label, { enabled });
+        if (outcome.ok) canonicalUrl = outcome.source.url;
+      }
+    } catch (e) {
+      failed.push({
+        label: r.preset.label,
+        reason: e instanceof Error ? e.message : String(e),
+      });
+      continue;
+    }
+    if (!outcome.ok) {
+      failed.push({ label: r.preset.label, reason: outcome.message || outcome.reason });
+      continue;
+    }
+    const url = canonicalUrl ?? outcome.source.url;
+    if (existingUrls.has(url)) {
+      skipped++;
+    } else {
+      added++;
+      existingUrls.add(url);
+    }
+  }
+
+  presetSummary.value = { added, skipped, failed };
+  presetBusy.value = false;
+}
 
 const scLabel = ref('');
 const scUrl = ref('');
@@ -144,9 +343,13 @@ async function disconnect(): Promise<void> {
 }
 
 onMounted(async () => {
-  await Promise.all([auth.hydrate(), subs.load(), shortcuts.load()]);
+  await Promise.all([auth.hydrate(), subs.load(), shortcuts.load(), settings.load()]);
   subs.bindStorage();
   shortcuts.bindStorage();
+  settings.bindStorage();
+  gsBase.value = settings.rsshubBase;
+  gsRefresh.value = settings.refreshIntervalMin;
+  rebuildPresetRows();
   try {
     redirectUrl.value = chrome.identity.getRedirectURL();
   } catch {
@@ -161,6 +364,145 @@ onMounted(async () => {
 <template>
   <main class="mx-auto min-h-screen max-w-2xl p-6">
     <h1 class="mb-4 text-2xl font-semibold">AIRSS Settings</h1>
+
+    <section class="mb-6 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+      <h2 class="text-lg font-medium">通用设置</h2>
+      <p class="mt-1 text-xs text-neutral-500">RSSHub 实例与周期刷新间隔。</p>
+      <form class="mt-3 space-y-3" @submit.prevent="saveGeneral">
+        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <label class="text-xs text-neutral-300">
+            <span class="block">RSSHub Base</span>
+            <input
+              v-model="gsBase"
+              class="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-sm"
+              placeholder="https://rsshub.app"
+              :disabled="gsBusy"
+            />
+          </label>
+          <label class="text-xs text-neutral-300">
+            <span class="block">刷新间隔（分钟，15–1440）</span>
+            <input
+              v-model.number="gsRefresh"
+              type="number"
+              min="15"
+              max="1440"
+              class="mt-1 w-full rounded border border-neutral-700 bg-neutral-950 px-2 py-1 text-sm"
+              :disabled="gsBusy"
+            />
+          </label>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            class="rounded bg-indigo-500 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-400 disabled:opacity-50"
+            :disabled="gsBusy"
+            type="submit"
+          >
+            {{ gsBusy ? '保存中…' : '保存' }}
+          </button>
+          <span v-if="gsError" class="text-xs text-red-400">{{ gsError }}</span>
+          <span v-else-if="gsSaved" class="text-xs text-emerald-400">已保存</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="mb-6 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
+      <h2 class="text-lg font-medium">AI 推荐源</h2>
+      <p class="mt-1 text-xs text-neutral-500">
+        勾选后一键导入。RSSHub 项会按上方"通用设置"的 Base 重写。高噪源（arXiv 等）默认关闭。
+      </p>
+
+      <div
+        v-for="cat in PRESET_CATEGORIES"
+        :key="cat.id"
+        class="mt-4 rounded border border-neutral-800/60 bg-neutral-950/40 p-3"
+      >
+        <div class="flex items-center justify-between gap-2">
+          <h3 class="text-sm font-medium text-neutral-200">{{ cat.label }}</h3>
+          <div class="flex items-center gap-1">
+            <button
+              type="button"
+              class="rounded bg-neutral-800 px-2 py-0.5 text-[11px] hover:bg-neutral-700"
+              :disabled="presetBusy"
+              @click="selectAllInCategory(cat.id, true)"
+            >
+              全选
+            </button>
+            <button
+              type="button"
+              class="rounded bg-neutral-800 px-2 py-0.5 text-[11px] hover:bg-neutral-700"
+              :disabled="presetBusy"
+              @click="selectAllInCategory(cat.id, false)"
+            >
+              清空
+            </button>
+            <button
+              type="button"
+              class="rounded bg-neutral-800 px-2 py-0.5 text-[11px] hover:bg-neutral-700"
+              :disabled="presetBusy"
+              @click="invertCategory(cat.id)"
+            >
+              反选
+            </button>
+          </div>
+        </div>
+        <ul class="mt-2 space-y-1">
+          <li
+            v-for="row in rowsByCategory(cat.id)"
+            :key="row.preset.label"
+            class="flex items-center gap-2 text-xs"
+          >
+            <input
+              :id="'preset-' + row.preset.label"
+              v-model="row.checked"
+              type="checkbox"
+              :disabled="presetBusy"
+            />
+            <label :for="'preset-' + row.preset.label" class="min-w-0 flex-1 cursor-pointer">
+              <span class="text-neutral-100">{{ row.preset.label }}</span>
+              <span
+                v-if="row.preset.defaultEnabled === false"
+                class="ml-1 rounded bg-amber-900/50 px-1 py-0.5 text-[10px] text-amber-300"
+              >默认关闭</span>
+              <span
+                v-if="row.preset.viaRsshub"
+                class="ml-1 rounded bg-neutral-800 px-1 py-0.5 text-[10px] text-neutral-400"
+              >RSSHub</span>
+              <span class="block truncate text-[11px] text-neutral-500">{{ truncateMid(row.url) }}</span>
+            </label>
+          </li>
+        </ul>
+      </div>
+
+      <div class="mt-4 flex items-center gap-2">
+        <button
+          class="rounded bg-indigo-500 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-400 disabled:opacity-50"
+          :disabled="presetBusy || selectedRows().length === 0"
+          @click="importSelected"
+        >
+          {{ presetBusy ? '导入中…' : `导入选中（${selectedRows().length}）` }}
+        </button>
+      </div>
+
+      <div
+        v-if="presetSummary"
+        class="mt-3 rounded border border-neutral-800 bg-neutral-950/60 p-3 text-xs"
+      >
+        <p class="text-neutral-300">
+          已添加 <span class="text-emerald-400">{{ presetSummary.added }}</span> ·
+          重复 <span class="text-neutral-400">{{ presetSummary.skipped }}</span> ·
+          失败 <span class="text-red-400">{{ presetSummary.failed.length }}</span>
+        </p>
+        <ul v-if="presetSummary.failed.length" class="mt-2 space-y-0.5">
+          <li
+            v-for="f in presetSummary.failed"
+            :key="f.label"
+            class="text-[11px] text-red-300"
+          >
+            · {{ f.label }} — {{ f.reason }}
+          </li>
+        </ul>
+      </div>
+    </section>
 
     <section class="rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
       <h2 class="text-lg font-medium">TickTick</h2>

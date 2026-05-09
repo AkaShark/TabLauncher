@@ -9,7 +9,9 @@
  *
  * Replies are { ok: true, ...data } | { ok: false, error: { code, message } }.
  *
- * chrome.alarms 2h refresh: deferred to M6.
+ * chrome.alarms periodic refresh (P1-lite): registered on both onInstalled and
+ * onStartup with period from settings.refreshIntervalMin; the onAlarm listener
+ * is at top-level module scope so it survives SW re-wake.
  */
 
 import { connect, revoke } from '@/core/oauth';
@@ -241,8 +243,67 @@ async function handle(msg: unknown): Promise<Reply<unknown>> {
   }
 }
 
+// ----- chrome.alarms periodic feed refresh (P1-lite, A' §3) -----
+
+const REFRESH_ALARM_NAME = 'airss.refresh';
+const SETTINGS_KEY = 'airss.settings.v1';
+const DEFAULT_REFRESH_MIN = 120;
+
+async function readRefreshMinutes(): Promise<number> {
+  try {
+    const out = await chrome.storage.local.get(SETTINGS_KEY);
+    const raw = out[SETTINGS_KEY] as { refreshIntervalMin?: unknown } | undefined;
+    const v = raw?.refreshIntervalMin;
+    if (typeof v === 'number' && Number.isFinite(v) && v >= 15 && v <= 1440) {
+      return Math.floor(v);
+    }
+  } catch (e) {
+    console.warn('[AIRSS alarms] read settings failed:', e);
+  }
+  return DEFAULT_REFRESH_MIN;
+}
+
+async function ensureRefreshAlarm(): Promise<void> {
+  const min = await readRefreshMinutes();
+  try {
+    await chrome.alarms.create(REFRESH_ALARM_NAME, {
+      periodInMinutes: min,
+      delayInMinutes: min,
+    });
+    console.log(`[AIRSS alarms] registered ${REFRESH_ALARM_NAME} every ${min}min`);
+  } catch (e) {
+    console.warn('[AIRSS alarms] create failed:', e);
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
   console.log('[AIRSS] installed');
+  void ensureRefreshAlarm();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  console.log('[AIRSS] startup');
+  void ensureRefreshAlarm();
+});
+
+// Top-level so the listener is bound on every SW wake-up.
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== REFRESH_ALARM_NAME) return;
+  console.log('[AIRSS alarms] tick → feed/refresh');
+  refreshFeeds().catch((e) => {
+    console.error('[AIRSS alarms] refreshFeeds failed:', e);
+  });
+});
+
+// Re-register the alarm whenever refreshIntervalMin changes.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local') return;
+  const ch = changes[SETTINGS_KEY];
+  if (!ch) return;
+  const oldVal = (ch.oldValue as { refreshIntervalMin?: number } | undefined)?.refreshIntervalMin;
+  const newVal = (ch.newValue as { refreshIntervalMin?: number } | undefined)?.refreshIntervalMin;
+  if (oldVal === newVal) return;
+  void ensureRefreshAlarm();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
