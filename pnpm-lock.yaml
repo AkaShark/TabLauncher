@@ -58,8 +58,8 @@ importers:
         specifier: ^14.12.0
         version: 14.12.3
       jest-webextension-mock:
-        specifier: ^3.9.0
-        version: 3.9.1
+        specifier: ^4.1.1
+        version: 4.1.1
       oxlint:
         specifier: ^1.63.0
         version: 1.63.0
@@ -3043,8 +3043,8 @@ packages:
     resolution: {integrity: sha512-ZB7wHqaRGVw/9hST/OuFUReG7M8vKeq0/J2egIGLdvjHCmYqGARhzXmtgi+gVeZ5uXFF219aOc3Ls2yLg27tkw==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
 
-  jest-webextension-mock@3.9.1:
-    resolution: {integrity: sha512-H2Wsa9JfjTSIdBsPa+k6jUS14JUTmFNk+/2BHBY5HwKUlSpJKtW/Cwe3a0DfEgwUtYld0HW4JadjEBWuh/zRhA==}
+  jest-webextension-mock@4.1.1:
+    resolution: {integrity: sha512-smCGBtl+5MpjKnJhyjCeaL/ZtdUa0T41tbHsEdb1nY3UEVogbYvehVw2MuMSvysFD3wNv4iYSIEgAwnR3H0YIw==}
 
   jest-worker@29.7.0:
     resolution: {integrity: sha512-eIz2msL/EzL9UFTFFx7jBTkeZfku0yUAyZZZmJ93H2TYEiroIx2PQjEXcwYtYl8zXCxb+PAmA2hLIt/6ZEkPHw==}
@@ -8631,7 +8631,7 @@ snapshots:
       pretty-format: 29.7.0
     optional: true
 
-  jest-webextension-mock@3.9.1: {}
+  jest-webextension-mock@4.1.1: {}
 
   jest-worker@29.7.0:
     dependencies:
