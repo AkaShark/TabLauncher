@@ -46,12 +46,12 @@ describe('aggregate', () => {
     expect(result.map((i) => i.title)).toEqual(['Recent', 'Mid', 'Old', 'NoDate']);
   });
 
-  it('case 5: caps output at 100 items by default', () => {
-    const items = Array.from({ length: 150 }, (_, idx) =>
+  it('case 5: caps output at 300 items by default', () => {
+    const items = Array.from({ length: 400 }, (_, idx) =>
       makeItem({ title: `Item ${idx}`, url: `https://example.com/${idx}`, sourceId: 'src1', publishedAt: idx }),
     );
     const result = aggregate([items]);
-    expect(result).toHaveLength(100);
+    expect(result).toHaveLength(300);
   });
 
   it('respects custom cap', () => {
