@@ -30,6 +30,7 @@ import { getCreds as getJuejinCreds } from '@/core/juejinCreds';
 import { fetchTrending } from '@/adapters/github/connector';
 import type { GithubConfig } from '@/adapters/github/types';
 import { getConfig as getGithubConfig, setConfig as setGithubConfig } from '@/core/githubConfig';
+import { time } from '@/utils/perf';
 
 interface RawFeedEntry {
   sourceId: string;
@@ -214,7 +215,7 @@ async function handle(msg: unknown): Promise<Reply<unknown>> {
         return { ok: true, data: null };
       }
       case 'feed/refresh': {
-        const stats = await refreshFeeds();
+        const stats = await time('sw.refresh', () => refreshFeeds());
         return { ok: true, data: stats };
       }
       case 'github/refresh': {
@@ -290,7 +291,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== REFRESH_ALARM_NAME) return;
   console.log('[AIRSS alarms] tick → feed/refresh');
-  refreshFeeds().catch((e) => {
+  time('sw.refresh', () => refreshFeeds()).catch((e) => {
     console.error('[AIRSS alarms] refreshFeeds failed:', e);
   });
 });

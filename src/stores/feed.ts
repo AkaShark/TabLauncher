@@ -19,6 +19,7 @@ import { parseRssXml } from '@/adapters/feed/rss';
 import type { FeedFetchFailure, FeedItem, FeedSourceConfig } from '@/adapters/feed/types';
 import { getCached, setCached } from '@/core/cache';
 import { getAll as getAllSources } from '@/core/subscriptions';
+import { time } from '@/utils/perf';
 
 export interface FeedTabInfo {
   id: string;
@@ -32,7 +33,9 @@ const PREPARSED_CACHE_KEY = 'feed.preparsed';
 const READMAP_KEY = 'airss.feed.readMap';
 const ACTIVE_TAB_KEY = 'airss.ui.activeFeedTab';
 const REFRESH_TIMEOUT_MS = 5_000;
-const MAX_RENDER = 30;
+// P2-lite (docs/perf-baseline.md): aggregation at 1000 items costs ~0.06ms,
+// so the DOM is the bottleneck — raise from 30 to 200, no virtualization.
+const MAX_RENDER = 200;
 
 export type FeedLoadingState =
   | 'idle'
@@ -276,38 +279,41 @@ export const useFeedStore = defineStore('feed', {
      * is available), apply readMap, persist as items cache.
      */
     async rebuildFromRaw(sources?: FeedSourceConfig[]): Promise<void> {
-      const list = sources ?? (await getAllSources()).filter((s) => s.enabled);
-      const [rawCached, preCached] = await Promise.all([
-        getCached<Record<string, RawFeedEntry>>(RAW_CACHE_KEY),
-        getCached<Record<string, PreparsedFeedEntry>>(PREPARSED_CACHE_KEY),
-      ]);
-      const raw = rawCached?.value ?? {};
-      const pre = preCached?.value ?? {};
-      if (!rawCached && !preCached) return;
+      // Architect P2-lite §8 A': hot path — instrument per refresh.
+      return time('feed.rebuildFromRaw', async () => {
+        const list = sources ?? (await getAllSources()).filter((s) => s.enabled);
+        const [rawCached, preCached] = await Promise.all([
+          getCached<Record<string, RawFeedEntry>>(RAW_CACHE_KEY),
+          getCached<Record<string, PreparsedFeedEntry>>(PREPARSED_CACHE_KEY),
+        ]);
+        const raw = rawCached?.value ?? {};
+        const pre = preCached?.value ?? {};
+        if (!rawCached && !preCached) return;
 
-      const perSource: FeedItem[][] = [];
-      for (const src of list) {
-        if (src.type === 'juejin') {
-          const entry = pre[src.id];
-          if (entry && Array.isArray(entry.items)) perSource.push(entry.items);
-          continue;
+        const perSource: FeedItem[][] = [];
+        for (const src of list) {
+          if (src.type === 'juejin') {
+            const entry = pre[src.id];
+            if (entry && Array.isArray(entry.items)) perSource.push(entry.items);
+            continue;
+          }
+          const entry = raw[src.id];
+          if (!entry || !entry.xml) continue;
+          try {
+            const items = parseRssXml(entry.xml, src.id, src.label);
+            perSource.push(items);
+          } catch (e) {
+            // Parse failure — surface in error.failedSources next refresh.
+            console.warn('[AIRSS] rss parse failed for', src.label, e);
+          }
         }
-        const entry = raw[src.id];
-        if (!entry || !entry.xml) continue;
-        try {
-          const items = parseRssXml(entry.xml, src.id, src.label);
-          perSource.push(items);
-        } catch (e) {
-          // Parse failure — surface in error.failedSources next refresh.
-          console.warn('[AIRSS] rss parse failed for', src.label, e);
-        }
-      }
-      const merged = aggregate(perSource).map((it) => ({
-        ...it,
-        isRead: !!this.readMap[it.id],
-      }));
-      this.items = merged;
-      await setCached(ITEMS_CACHE_KEY, merged);
+        const merged = aggregate(perSource).map((it) => ({
+          ...it,
+          isRead: !!this.readMap[it.id],
+        }));
+        this.items = merged;
+        await setCached(ITEMS_CACHE_KEY, merged);
+      });
     },
 
     async markRead(itemId: string): Promise<void> {
