@@ -14,7 +14,7 @@
 import { FeedFetchError } from '@/adapters/feed/fetcher';
 import type { FeedItem } from '@/adapters/feed/types';
 import { normalizeJuejinFeed } from './normalizer';
-import type { JuejinFeedResponse } from './types';
+import type { JuejinFeedItem, JuejinFeedResponse } from './types';
 
 const ENDPOINT = 'https://api.juejin.cn/recommend_api/v1/article/recommend_all_feed';
 const CATE_ENDPOINT_BASE =
@@ -122,8 +122,14 @@ export interface FetchCateFeedOptions {
  * src/core/juejinCreds.ts) — the user pastes a curl from a logged-in juejin.cn
  * Network panel and we extract the pair.
  */
-export async function fetchCateFeed(opts: FetchCateFeedOptions): Promise<FeedItem[]> {
-  const limit = opts.limit ?? DEFAULT_LIMIT;
+const CATE_MAX_PAGES = 5;
+const CATE_PAGE_SIZE = 20;
+
+async function fetchCatePage(
+  opts: FetchCateFeedOptions,
+  cursor: string,
+  pageLimit: number,
+): Promise<JuejinFeedResponse> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
 
@@ -143,11 +149,20 @@ export async function fetchCateFeed(opts: FetchCateFeedOptions): Promise<FeedIte
       id_type: 2,
       client_type: 6587,
       sort_type: opts.sortType,
-      cursor: '0',
-      limit,
+      cursor,
+      limit: pageLimit,
       cate_id: opts.cateId,
     });
-    console.log('[AIRSS juejin cate] POST', endpoint, 'body:', requestBody, 'csrf-prefix:', opts.csrfToken?.slice(0, 16));
+    console.log(
+      '[AIRSS juejin cate] POST',
+      endpoint,
+      'cursor:',
+      cursor,
+      'limit:',
+      pageLimit,
+      'csrf-prefix:',
+      opts.csrfToken?.slice(0, 16),
+    );
     res = await fetch(endpoint, {
       method: 'POST',
       headers,
@@ -175,7 +190,6 @@ export async function fetchCateFeed(opts: FetchCateFeedOptions): Promise<FeedIte
   let body: JuejinFeedResponse;
   try {
     const text = await res.text();
-    console.log('[AIRSS juejin cate] raw response (truncated):', text.slice(0, 500));
     body = JSON.parse(text) as JuejinFeedResponse;
   } catch (e) {
     throw new FeedFetchError(
@@ -196,7 +210,45 @@ export async function fetchCateFeed(opts: FetchCateFeedOptions): Promise<FeedIte
   if (!Array.isArray(body.data)) {
     throw new FeedFetchError('juejin cate: schema mismatch (data not array)', 'parse');
   }
+  return body;
+}
 
-  const filtered = body.data.filter((it) => it.item_type !== ITEM_TYPE_AD);
-  return normalizeJuejinFeed(filtered, opts.defaultSourceLabel);
+export async function fetchCateFeed(opts: FetchCateFeedOptions): Promise<FeedItem[]> {
+  const target = opts.limit ?? DEFAULT_LIMIT;
+  const pageLimit = Math.min(target, CATE_PAGE_SIZE);
+
+  const collected: JuejinFeedItem[] = [];
+  const seenIds = new Set<string>();
+  let cursor = '0';
+  let pages = 0;
+
+  while (collected.length < target && pages < CATE_MAX_PAGES) {
+    let body: JuejinFeedResponse;
+    try {
+      body = await fetchCatePage(opts, cursor, pageLimit);
+    } catch (e) {
+      // First-page failure propagates; later-page failure keeps what we have.
+      if (pages === 0) throw e;
+      console.warn('[AIRSS juejin cate] page', pages, 'failed, returning partial:', e);
+      break;
+    }
+    pages++;
+
+    const articles = body.data.filter((it) => it.item_type !== ITEM_TYPE_AD);
+    for (const it of articles) {
+      const id = it.item_info.article_id;
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+      collected.push(it);
+      if (collected.length >= target) break;
+    }
+    console.log(
+      `[AIRSS juejin cate] page ${pages} got ${articles.length} (collected ${collected.length}/${target}), has_more=${body.has_more}, next-cursor=${body.cursor?.slice(0, 32)}`,
+    );
+
+    if (!body.has_more || !body.cursor || body.cursor === cursor) break;
+    cursor = body.cursor;
+  }
+
+  return normalizeJuejinFeed(collected, opts.defaultSourceLabel);
 }
