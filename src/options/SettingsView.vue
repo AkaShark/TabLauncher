@@ -367,7 +367,11 @@ onMounted(async () => {
 
     <section class="mb-6 rounded-lg border border-neutral-800 bg-neutral-900/40 p-4">
       <h2 class="text-lg font-medium">通用设置</h2>
-      <p class="mt-1 text-xs text-neutral-500">RSSHub 实例与周期刷新间隔。</p>
+      <p class="mt-1 text-xs text-neutral-500">
+        RSSHub 实例与周期刷新间隔。公共 <code class="font-mono">rsshub.app</code>
+        经常被限流（导入后看到 <code class="font-mono">blocked by upstream (HTTP 403)</code>
+        多半就是它），建议改成自托管或可用的镜像。
+      </p>
       <form class="mt-3 space-y-3" @submit.prevent="saveGeneral">
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <label class="text-xs text-neutral-300">

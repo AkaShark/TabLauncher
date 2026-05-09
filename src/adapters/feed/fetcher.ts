@@ -83,7 +83,7 @@ export async function fetchFeedXml(source: FeedSourceConfig): Promise<string> {
     }
 
     if (res.status === 401 || res.status === 403) {
-      throw new FeedFetchError(`permission denied (${res.status})`, 'permission');
+      throw new FeedFetchError(`blocked by upstream (HTTP ${res.status})`, 'permission');
     }
     if (!res.ok) {
       throw new FeedFetchError(`http ${res.status} fetching ${source.url}`, 'http');

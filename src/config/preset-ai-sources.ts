@@ -52,9 +52,8 @@ export const PRESET_AI_SOURCES: PresetSource[] = [
   { kind: 'rss', input: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml', label: 'The Verge — AI', category: 'media' },
   { kind: 'rss', input: `${RSSHUB_BASE}/arstechnica/tag/artificial-intelligence`, label: 'Ars Technica — AI', category: 'media', viaRsshub: true },
   { kind: 'rss', input: 'https://venturebeat.com/category/ai/feed/', label: 'VentureBeat AI', category: 'media' },
-  { kind: 'rss', input: 'https://www.deeplearning.ai/the-batch/feed/', label: 'The Batch (DeepLearning.AI)', category: 'media' },
   { kind: 'substack', input: 'latent.space', label: 'Latent Space', category: 'media' },
-  { kind: 'substack', input: 'semianalysis', label: 'SemiAnalysis', category: 'media' },
+  { kind: 'rss', input: 'https://semianalysis.com/feed/', label: 'SemiAnalysis', category: 'media', note: 'self-hosted feed (migrated from Substack)' },
 
   // Tier 4 — China
   { kind: 'rss', input: `${RSSHUB_BASE}/jiqizhixin/latest`, label: '机器之心', category: 'china', viaRsshub: true },
@@ -98,7 +97,8 @@ export function withRsshubBase(
 
 /**
  * Excluded from the seed (intentional):
- *   - The Information      — paywalled
- *   - Papers with Code     — no usable feed, low signal as a stream
- *   - 中国人工智能学会      — no RSS
+ *   - The Information         — paywalled
+ *   - Papers with Code        — no usable feed, low signal as a stream
+ *   - 中国人工智能学会         — no RSS
+ *   - The Batch (DeepLearning.AI) — no public RSS endpoint as of 2026-05
  */
