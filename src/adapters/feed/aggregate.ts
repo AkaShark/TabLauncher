@@ -1,14 +1,12 @@
 /**
- * Multi-source feed aggregation: flatten → dedupe (per-source) → sort → cap.
+ * Multi-source feed aggregation: flatten → dedupe → sort → cap.
  *
- *   - dedupe key = `${sourceId}::${url || title}` — always source-scoped so
- *     subscribing to overlapping juejin cates (e.g. 推荐流 + iOS · 最新) keeps
- *     each source's own copy. The per-tab filter then surfaces what each
- *     source actually returned, instead of a popular article being attributed
- *     only to whichever source the SW happened to process first.
- *   - sort by publishedAt desc, null sinks to bottom.
- *   - default cap 300 (>= UI MAX_RENDER=200 so per-tab filters don't starve
- *     after the global sort).
+ * Plan §M4 AC-F4:
+ *   - dedupe key = url || `${title}::${sourceId}`
+ *   - sort by publishedAt desc, null sinks to bottom
+ *   - default cap 300 (must stay >= UI MAX_RENDER=200 to not starve per-tab
+ *     filters; with 20+ sources × ~20 items the old 100 cap was clipping
+ *     older items out of the per-source tabs after global sort)
  */
 
 import type { FeedItem } from './types';
@@ -24,7 +22,7 @@ export function aggregate(perSource: FeedItem[][], cap: number = DEFAULT_CAP): F
   const seen = new Set<string>();
   const deduped: FeedItem[] = [];
   for (const item of flat) {
-    const key = `${item.sourceId}::${item.url || item.title}`;
+    const key = item.url ? item.url : `${item.title}::${item.sourceId}`;
     if (seen.has(key)) continue;
     seen.add(key);
     deduped.push(item);

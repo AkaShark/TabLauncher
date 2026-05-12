@@ -15,21 +15,12 @@ function makeItem(overrides: Partial<FeedItem> & Pick<FeedItem, 'title' | 'url' 
 }
 
 describe('aggregate', () => {
-  it('case 1: deduplicates items with the same url WITHIN one source, keeping the first', () => {
+  it('case 1: deduplicates items with the same url, keeping the first', () => {
     const a = makeItem({ title: 'A', url: 'https://example.com/1', sourceId: 'src1', publishedAt: 1000 });
-    const b = makeItem({ title: 'A duplicate', url: 'https://example.com/1', sourceId: 'src1', publishedAt: 2000 });
-    const result = aggregate([[a, b]]);
+    const b = makeItem({ title: 'A duplicate', url: 'https://example.com/1', sourceId: 'src2', publishedAt: 2000 });
+    const result = aggregate([[a], [b]]);
     expect(result).toHaveLength(1);
     expect(result[0]!.title).toBe('A');
-  });
-
-  it('case 1b: keeps both copies when the same url comes from different sources', () => {
-    // Per-source dedupe lets overlapping juejin cates (e.g. 推荐流 vs iOS · 最新)
-    // each surface their own copy in their own tab.
-    const a = makeItem({ title: 'A', url: 'https://example.com/1', sourceId: 'src1', publishedAt: 1000 });
-    const b = makeItem({ title: 'A', url: 'https://example.com/1', sourceId: 'src2', publishedAt: 2000 });
-    const result = aggregate([[a], [b]]);
-    expect(result).toHaveLength(2);
   });
 
   it('case 2: deduplicates items with same title+sourceId', () => {
