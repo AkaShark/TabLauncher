@@ -79,7 +79,11 @@ onMounted(async () => {
   subs.bindStorage();
   await Promise.all([feed.loadFromCache(), subs.load()]);
   await feed.loadActiveTab(subs.enabledSources);
-  void feed.refresh();
+  const REFRESH_TTL_MS = 30 * 60 * 1000;
+  const last = feed.lastRefreshedAt ?? 0;
+  if (Date.now() - last >= REFRESH_TTL_MS) {
+    void feed.refresh();
+  }
   await nextTick();
   if (PERF_ENABLED) {
     mark('feed.firstPaint.end');
